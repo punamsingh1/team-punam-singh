@@ -1,17 +1,39 @@
+'use client';
 
-import Link from "next/link";
-export default function Home() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function RootPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // API-First Logic: We check if a session exists in the store
+    // For Web, the cookie is sent automatically.
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth/me'); // A simple endpoint to check token
+        if (res.ok) {
+          router.replace('/dashboard');
+        } else {
+          router.replace('/register'); // Ttteeee Flow: Send new users to Register
+        }
+      } catch {
+        router.replace('/login');
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-6 text-center">
-      <h1 className="text-5xl font-black text-gray-900 mb-4">Ticket Management System</h1>
-      <p className="text-gray-600 mb-8 max-w-md">Manage your support tickets .</p>
-      
-      <Link 
-        href="/dashboard" 
-        className="px-8 py-3 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition-all shadow-lg"
-      >
-        Go to Dashboard
-      </Link>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-500 font-medium animate-pulse text-center">
+          Ttteeee Identity System<br/>
+          <span className="text-xs font-mono uppercase">Initializing Secure Handshake...</span>
+        </p>
+      </div>
     </div>
   );
 }
