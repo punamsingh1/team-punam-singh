@@ -19,6 +19,7 @@
         "name": "next"
       }
     ],
+    
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -34,7 +35,8 @@
      "**/*.d.ts",
       "*.css"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  
 
 
 }

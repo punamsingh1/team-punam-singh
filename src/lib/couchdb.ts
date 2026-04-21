@@ -1,16 +1,31 @@
 import Nano from 'nano';
-// 1. ADD THIS IMPORT (The 'Ticket' shape now lives in your types folder)
-import type { Ticket } from '@/types/ticket'; 
 
-const USER = process.env.COUCHDB_USER || 'admin';
-const PASS = process.env.COUCHDB_PASSWORD || 'admin123';
+const username = 'admin';
+const password = 'admin123'; 
+const address = '127.0.0.1:5984';
 
-// Use 127.0.0.1 for local Windows connection to Docker
-const url = `http://${USER}:${PASS}@127.0.0.1:5984`;
+const COUCHDB_URL = `http://${username}:${password}@${address}`;
 
-const nano = Nano(url);
+export const nano = Nano(COUCHDB_URL);
 
-// 2. NOW THIS WORKS because we imported Ticket above
-export const ticketDb = nano.db.use<Ticket>('tickets');
+// Export database handles
+export const userDb = nano.use('users');
+export const sessionDb = nano.use('sessions');
 
-export default nano;
+export const initDatabases = async () => {
+  const dbs = ['users', 'sessions'];
+  for (const dbName of dbs) {
+    try {
+      await nano.db.create(dbName);
+      console.log(`✅ Database "${dbName}" created!`);
+    } catch (err: unknown) {
+      const couchErr = err as { statusCode?: number };
+      if (couchErr.statusCode === 412) {
+        console.log(`🔌 Database "${dbName}" is ready.`);
+      } else {
+        console.error(`❌ CouchDB Connection failed for ${dbName}. Check if CouchDB is running.`);
+      }
+    }
+  }
+};
+initDatabases().catch(err => console.error("Critical DB Initialization Failure:", err));
