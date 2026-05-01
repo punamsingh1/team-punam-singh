@@ -1,10 +1,11 @@
+// src/app/api/auth/register/route.ts
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto'; // Native Node.js module for secure tokens
-import { userDb, initDatabases } from '@/lib/couchdb';
+import crypto from 'crypto';
+import { userDb, tokenDb, initDatabases } from '@/lib/couchdb';
 import { sendVerificationEmail } from '@/lib/mail-utils';
 
-export const runtime = 'nodejs'; // Ensure Node runtime for Nodemailer/Bcrypt
+export const runtime = 'nodejs';
 
 interface UserIdentity {
   _id: string;
@@ -13,7 +14,7 @@ interface UserIdentity {
   password: string;
   deviceName: string;
   emailVerified: boolean;
-  verificationToken: string;
+  status: 'PENDING' | 'ACTIVE';
   createdAt: string;
 }
 
@@ -21,55 +22,131 @@ export async function POST(req: Request) {
   try {
     await initDatabases();
 
-    const { name, email, password, deviceName } = await req.json();
+    // ─── Safe body parse ────────────────────────────────────────────────────
+    let body: {
+      name?: string;
+      email?: string;
+      password?: string;
+      deviceName?: string;
+    };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { message: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
+
+    const { name, email, password, deviceName } = body;
 
     if (!email || !password) {
-      return NextResponse.json({ message: "Missing credentials" }, { status: 400 });
+      return NextResponse.json(
+        { message: 'Missing credentials' },
+        { status: 400 }
+      );
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const passwordHash = await bcrypt.hash(password, 10);
-    
-    // 1. Generate a secure random token for email verification
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    console.log('📝 Registering:', cleanEmail);
 
+    // ─── Check if user already exists ──────────────────────────────────────
+    try {
+      await userDb.get(cleanEmail);
+      return NextResponse.json(
+        { message: 'This email is already registered.' },
+        { status: 409 }
+      );
+    } catch (err) {
+      const e = err as { statusCode?: number };
+      if (e.statusCode !== 404) throw err;
+      // 404 = user does not exist = good, continue
+    }
+
+    // ─── Hash password ──────────────────────────────────────────────────────
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // ─── FIX: Save user WITHOUT token — token goes to tokenDb only ──────────
+    // If verificationToken is stored here AND in tokenDb, verify searches
+    // tokenDb and finds nothing when token was only saved to userDb.
     const userData: UserIdentity = {
       _id: cleanEmail,
       name: name || 'Tee User',
       email: cleanEmail,
       password: passwordHash,
       deviceName: deviceName || 'Unknown Device',
-      emailVerified: false, // User is not verified yet
-      verificationToken: verificationToken,
-      createdAt: new Date().toISOString()
+      emailVerified: false,
+      status: 'PENDING',       // ← never ACTIVE until email verified
+      createdAt: new Date().toISOString(),
     };
 
-    // 2. Save user to CouchDB
     await userDb.insert(userData);
+    console.log('👤 User saved to userDb:', cleanEmail);
 
-    // 3. Trigger Email Verification via MailDev
-    const emailSent = await sendVerificationEmail(cleanEmail, verificationToken);
+    // ─── FIX: Save token to tokenDb — this is what verify-email searches ────
+    // This was the root cause: token was in userDb, verify searched tokenDb
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    console.log('🔑 Token generated:', rawToken.slice(0, 16) + '...');
 
-    if (!emailSent) {
-      console.error("⚠️ User saved but Verification Email failed to send.");
-      // We don't block registration, but we notify the console
+    const tokenDoc = {
+      _id: `verify_${cleanEmail}_${Date.now()}`,
+      token: rawToken,
+      email: cleanEmail,
+      expires: new Date(
+        Date.now() + 24 * 60 * 60 * 1000  // 24 hours
+      ).toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    // ─── Wrap token save in its own try/catch ────────────────────────────────
+    // If this fails, we know exactly where the problem is
+    try {
+      const saveResult = await tokenDb.insert(tokenDoc);
+      console.log('✅ Token saved to tokenDb. ID:', saveResult.id);
+    } catch (tokenErr) {
+      console.error('❌ CRITICAL: Token save to tokenDb failed:', tokenErr);
+      // User saved but token failed — roll back user to keep DB clean
+      try {
+        const savedUser = await userDb.get(cleanEmail) as { _rev: string };
+        await userDb.destroy(cleanEmail, savedUser._rev);
+        console.log('🔄 User rolled back due to token save failure');
+      } catch {
+        console.error('⚠️ Rollback also failed — manual cleanup needed');
+      }
+      return NextResponse.json(
+        { message: 'Registration failed. Please try again.' },
+        { status: 500 }
+      );
     }
 
-    console.log("✅ Identity Registered & Verification Sent:", cleanEmail);
+    // ─── Send verification email ────────────────────────────────────────────
+    const emailSent = await sendVerificationEmail(cleanEmail, rawToken);
+    if (!emailSent) {
+      console.warn('⚠️ Token saved but verification email failed to send.');
+    }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Registration successful. Please check MailDev for verification." 
-    }, { status: 201 });
+    console.log('✅ Registration complete for:', cleanEmail);
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Registration successful. Check MailDev for verification.',
+      },
+      { status: 201 }
+    );
 
   } catch (error: unknown) {
     const err = error as { statusCode?: number; message?: string };
-    
     if (err.statusCode === 409) {
-      return NextResponse.json({ message: "This email is already registered." }, { status: 409 });
+      return NextResponse.json(
+        { message: 'This email is already registered.' },
+        { status: 409 }
+      );
     }
-
-    console.error("Registration Error:", err);
-    return NextResponse.json({ message: "Handshake Failed: Database Connection Error" }, { status: 500 });
+    console.error('Registration Error:', err);
+    return NextResponse.json(
+      { message: 'Handshake Failed: Database Connection Error' },
+      { status: 500 }
+    );
   }
 }

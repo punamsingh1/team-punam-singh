@@ -11,9 +11,10 @@ export const nano = Nano(COUCHDB_URL);
 // Export database handles
 export const userDb = nano.use('users');
 export const sessionDb = nano.use('sessions');
+export const tokenDb = nano.use('verificationtokens');
 
 export const initDatabases = async () => {
-  const dbs = ['users', 'sessions'];
+  const dbs = ['users', 'sessions', 'verificationtokens'];
   for (const dbName of dbs) {
     try {
       await nano.db.create(dbName);

@@ -8,6 +8,7 @@ interface UserProfile {
   name: string;
   email: string;
   role?: string;
+  status:string;
 }
 
 export async function GET(req: Request) {
@@ -34,16 +35,17 @@ export async function GET(req: Request) {
     const user = (await userDb.get(userId)) as unknown as UserProfile;
 
     // 4. Return Ttteeee Telemetry Data
-    return NextResponse.json({
-      success: true,
-      data: {
-        name: user.name,
-        email: user.email,
-        status: "Active",
-        lastSync: new Date().toISOString(),
-        system: "API-First V1"
-      }
-    }, { status: 200 });
+   return NextResponse.json({
+  success: true,
+  data: {
+    name: user.name,
+    email: user.email,
+    // Change this line:
+    status: user.status, // Read the database value instead of hardcoding it
+    lastSync: new Date().toISOString(),
+    system: "API-First V1"
+  }
+});
 
   } catch (error: unknown) {
     const err = error as { statusCode?: number };

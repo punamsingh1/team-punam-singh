@@ -1,15 +1,22 @@
-// types/database.ts
-import type { MaybeDocument  } from 'nano';
+// src/types/database.ts
+import type { MaybeDocument } from 'nano';
 
-export interface UserProfile {
-  name: string;
-  email: string;
-  role: 'admin' | 'user';
-  created_at: string;
-}
-
-// This line is the most important for scalability
-export interface UserDocument extends UserProfile, MaybeDocument {
-  _id: string;
+export interface VerificationToken {
+  _id: string;      
   _rev: string;
+  token: string;
+  email: string;
+  expires: string;
 }
+
+export interface User {
+  _id: string;      
+  _rev: string;
+  email: string;
+  status: 'PENDING' | 'ACTIVE';
+  emailVerified?: string;
+}
+
+// These are the types you MUST import in your route.ts
+export type VerificationTokenDocument = VerificationToken & MaybeDocument;
+export type UserDocument = User & MaybeDocument;

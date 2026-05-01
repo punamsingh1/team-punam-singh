@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { headers } from "next/headers"; // CHANGED: Added headers
 import bcrypt from 'bcryptjs';
-import { userDb } from '@/lib/couchdb'; 
+import { userDb, sessionDb } from '@/lib/couchdb'; // CHANGED: Added sessionDb
 import { generateTokens } from '@/lib/auth-utils'; 
 
 // 1. Strict Interface Definition
@@ -28,10 +29,6 @@ export async function POST(req: Request) {
     const userEmail = email.toLowerCase().trim();
     console.log("🔍 Attempting Identity Verification for:", userEmail);
 
-    /**
-     * 3. Selector-Based Fetch (Ttteeee Recommended)
-     * This searches the 'email' field regardless of what the '_id' is.
-     */
     const result = await userDb.find({
       selector: { email: userEmail },
       limit: 1
@@ -39,40 +36,58 @@ export async function POST(req: Request) {
 
     const user = result.docs[0];
 
-    // 4. Identity Check
     if (!user || !user.password) {
       console.warn("❌ Auth Denied: User not found in CouchDB");
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    // 5. Cryptographic Verification
+    // 3. Cryptographic Verification
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    console.log("📊 Debug: Password Match Result:", isPasswordValid);
 
     if (!isPasswordValid) {
       console.warn("❌ Auth Denied: Password hash mismatch");
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    // 6. Token & Session Orchestration
-    const sessionId = Math.random().toString(36).substring(7);
+    // --- CHANGED: START NEW SESSION LOGIC ---
+    // 1. Extract the User-Agent
+   const headersList = await headers(); // <--- Make sure this is awaited
+const userAgent = headersList.get("user-agent") || "Unknown Device";
+    
+    // 2. Generate Session ID
+   const sessionId = Math.random().toString(36).substring(7);
+
+    // 3. Create the session document
+    const newSession = {
+      _id: `session:${sessionId}`, // Naming convention helps lookups
+      userId: user._id,
+      userAgent: userAgent,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days
+    };
+
+    // 4. Save to CouchDB
+    await sessionDb.insert(newSession);
+    // --- CHANGED: END NEW SESSION LOGIC ---
+
+    // 5. Token & Session Orchestration
     const { accessToken, refreshToken } = generateTokens(user._id, sessionId);
 
-    console.log("✅ Identity Verified:", userEmail);
+    console.log("✅ Identity Verified & Session Created:", userEmail);
 
     const response = NextResponse.json({
       success: true,
       user: { name: user.name, email: user.email },
-      refreshToken: refreshToken // Body-passed for cross-platform utility
+      refreshToken: refreshToken 
     }, { status: 200 });
 
-    // 7. Cookie Persistence (Strict Pathing)
+    // 6. Cookie Persistence 
     response.cookies.set('accessToken', accessToken, { 
       httpOnly: true, 
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      path: '/', // Crucial: Allows /dashboard to read the cookie
-      maxAge: 60 * 60 * 24 // 24 Hours
+      path: '/', 
+      maxAge: 60 * 60 * 24 
     });
 
     return response;
