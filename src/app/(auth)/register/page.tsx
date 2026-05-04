@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -20,20 +20,12 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
-    const deviceName =
-      typeof window !== 'undefined'
-        ? `${window.navigator.platform} (Tee Identity)`
-        : 'Unknown Device';
+    const deviceName = `${window.navigator.platform} (Tee Identity)`;
 
     try {
       const response = await fetch('/api/auth/register', {
@@ -55,7 +47,6 @@ export default function RegisterPage() {
 
       alert('Identity Created! Now proceed to Login.');
       router.push('/login');
-
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -65,8 +56,6 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
-
-  if (!mounted) return null;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">

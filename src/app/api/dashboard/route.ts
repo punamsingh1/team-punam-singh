@@ -2,56 +2,55 @@ import { NextResponse } from 'next/server';
 import { userDb } from '@/lib/couchdb';
 import { jwtVerify } from 'jose';
 
-// Define the User Document Interface (No 'any' keywords)
 interface UserProfile {
   _id: string;
   name: string;
   email: string;
   role?: string;
-  status:string;
+  status: string;
 }
 
 export async function GET(req: Request) {
   try {
-    // 1. Extract Token from Cookie (API-First for Web)
-    const cookieHeader = req.headers.get('cookie');
-    const token = cookieHeader
-      ?.split(';')
-      .find((c) => c.trim().startsWith('accessToken='))
-      ?.split('=')[1];
+    // FIXED: read from Authorization header, not cookie
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : null;
 
     if (!token) {
       return NextResponse.json({ message: "Not Authorized" }, { status: 401 });
     }
 
-    // 2. Verify Token using jose (Edge Runtime compatible)
     const secret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    
-    // The payload contains the userId we stored during login
-    const userId = payload.userId as string;
 
-    // 3. Fetch User Data from CouchDB
+    // FIXED: your login stores sub not userId in token payload
+    const userId = (payload.sub ?? payload.userId) as string;
+
     const user = (await userDb.get(userId)) as unknown as UserProfile;
 
-    // 4. Return Ttteeee Telemetry Data
-   return NextResponse.json({
-  success: true,
-  data: {
-    name: user.name,
-    email: user.email,
-    // Change this line:
-    status: user.status, // Read the database value instead of hardcoding it
-    lastSync: new Date().toISOString(),
-    system: "API-First V1"
-  }
-});
+    return NextResponse.json({
+      success: true,
+      data: {
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        lastSync: new Date().toISOString(),
+        system: "API-First V1"
+      }
+    });
 
   } catch (error: unknown) {
-    const err = error as { statusCode?: number };
-    
+    const err = error as { statusCode?: number; code?: string };
+
     if (err.statusCode === 404) {
       return NextResponse.json({ message: "Identity not found" }, { status: 404 });
+    }
+
+    // FIXED: handle expired token specifically — tell frontend to refresh
+    if (err.code === 'ERR_JWT_EXPIRED') {
+      return NextResponse.json({ message: "Token expired" }, { status: 401 });
     }
 
     console.error("📊 DASHBOARD_API_ERROR:", error);

@@ -1,20 +1,20 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { verifyJWT } from '@/lib/auth-utils'; // 👈 Use your centralized utility
+import { verifyJWT } from '@/lib/auth-utils';
 
-export const runtime = 'nodejs'; 
+export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('accessToken')?.value;
+    // FIXED: read from Authorization header, not cookie
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : null;
 
     if (!token) {
       return NextResponse.json({ message: "No token found" }, { status: 401 });
     }
 
-    // 🛡️ Use your utility instead of 'jose'
-    // This ensures we use 'jsonwebtoken' logic consistent with your Login
     const decoded = verifyJWT(token, 'access');
 
     if (!decoded || !decoded.userId) {
@@ -22,7 +22,6 @@ export async function GET() {
       return NextResponse.json({ message: "Invalid session" }, { status: 401 });
     }
 
-    // Return the user data (TTTEEEE API-First style)
     return NextResponse.json({
       success: true,
       user: {

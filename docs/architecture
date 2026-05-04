@@ -1,0 +1,73 @@
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+                                             Structure (main files)
+
+
+
+                                             /src
+├── /app
+│   ├── /api
+│   │   ├── /auth
+│   │   │   ├── /login/route.ts       # Validates creds -> creates session -> returns tokens
+│   │   │   ├── /refresh/route.ts     # Validates refresh token -> Rotates tokens
+│   │   │   ├── /logout/route.ts      # Revokes session in DB -> Clears cookie
+│   │   │   └── /sessions/route.ts    # List/Revoke specific devices
+│   │   └── /dashboard/route.ts       # Protected by Bearer token check
+│   └── /layout.tsx                   # Global UI container
+├── /lib
+│   ├── /couchdb.ts                   # CouchDB connection & abstraction
+│   ├── /auth-utils.ts                # JWT generation, token hashing, session logic
+│   ├── /authStore.ts                 # In-memory storage for Web Access Tokens
+│   └── /apiClient.ts                 # Axios/Fetch interceptor (auto-injects Bearer token)
+└── /proxy.ts                    # The "Bouncer": Intercepts requests, checks state
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Secure Identity Protocol:
+Architectural Blueprint
+
+Version: 1.0 (Draft)
+Objective: API-First authentication system removing reliance on
+insecure client-side storage (localStorage) and offloading state to a
+dedicated session registry.
+
+1. Authentication Strategy
+
+Client Access Token Refresh Token
+
+Web In-Memory Variable HttpOnly/Secure Cookie
+
+Mobile
+
+Secure Keychain/
+Keystore
+
+Secure Keychain/
+Keystore
+
+2. Session Registry (CouchDB)
+The sessions table acts as the source of truth for all logged-in
+devices.
+Entry: { _id: 'session:', userId, tokenHash,
+platform, deviceName, createdAt, expiresAt }
+Revocation: Deleting the document terminates the session
+immediately across all API requests.
+
+
+/////////////////////////////////////////////////
+
+Key Architectural Decisions
+Security (No XSS): We have explicitly eliminated localStorage for tokens. On the Web, we use HttpOnly cookies for the refresh token. The accessToken lives only in memory (a volatile variable). If the user refreshes, they must hit /refresh to get a new access token. This is the gold standard for banking and high-security apps.
+
+API-First Approach: By keeping the accessToken inside the Authorization: Bearer header, your backend remains agnostic of the client. Whether it’s a React Native app or a browser, the validation logic (middleware.ts) looks exactly the same.
+
+Device-Awareness: Every login creates an entry in a sessions collection in CouchDB. This allows us to track deviceName, platform (iOS/Android/Web), and createdAt. Revoking a session is as simple as deleting that document in CouchDB.
+
+Token Rotation: Every time /refresh is called, we issue a new refresh token. This allows us to detect token theft; if a leaked refresh token is reused, we can immediately invalidate the entire session chain.
+
+

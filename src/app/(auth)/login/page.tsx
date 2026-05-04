@@ -1,8 +1,20 @@
 'use client';
-
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { setAccessToken } from '@/lib/token-store';
+
+// Define the shape of the login API response
+interface LoginResponse {
+  accessToken: string;
+  message?: string;
+}
+
+// CHANGED: accessToken stored in memory only
+let accessToken: string | null = null;
+
+export function getAccessToken(): string | null { return accessToken; }
+export function clearAccessToken(): void { accessToken = null; }
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,37 +22,35 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 1. Ensure keys match the API route exactly
-      const payload = { 
-        email: email.toLowerCase().trim(), 
-        password 
-      };
-
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as LoginResponse;
 
       if (!res.ok) {
-        throw new Error(data.message || "Handshake Failed");
+        throw new Error(data.message || "Login Failed");
       }
-
-      // Success: Redirect to protected dashboard
+setAccessToken(data.accessToken); 
+      accessToken = data.accessToken;
       router.push('/dashboard');
       router.refresh();
 
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Authentication Error";
-      console.error("Auth Fail:", msg);
-      alert(msg);
+      // Narrowing unknown type to a string
+      const message = error instanceof Error ? error.message : "Authentication Error";
+      console.error("Auth Fail:", message);
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -49,7 +59,6 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md space-y-8 rounded-2xl bg-white p-10 shadow-xl border border-gray-100">
-        
         <header className="text-center">
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Sign In</h2>
           <p className="mt-2 text-sm text-gray-600 uppercase tracking-widest font-medium">
@@ -106,7 +115,6 @@ export default function LoginPage() {
 
         <div className="text-center text-sm">
           <p className="text-gray-600">
-           
             <Link href="/register" className="font-bold text-blue-600 hover:text-blue-500 transition-colors">
               Register here
             </Link>

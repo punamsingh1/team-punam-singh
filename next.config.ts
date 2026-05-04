@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
    * Now, /api requests will be handled locally by your Next.js API routes.
    */
   reactStrictMode: true,
+  trailingSlash: true, // or false
   // You can add other config options here, but keep 'rewrites' empty or removed.
 };
 

@@ -18,11 +18,12 @@ interface UserIdentity {
   createdAt: string;
 }
 
+// 1. Existing Registration Logic
 export async function POST(req: Request) {
   try {
     await initDatabases();
 
-    // ─── Safe body parse ────────────────────────────────────────────────────
+    // ─── Safe body parse 
     let body: {
       name?: string;
       email?: string;
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
     const cleanEmail = email.toLowerCase().trim();
     console.log('📝 Registering:', cleanEmail);
 
-    // ─── Check if user already exists ──────────────────────────────────────
+    // ─── Check if user already exists 
     try {
       await userDb.get(cleanEmail);
       return NextResponse.json(
@@ -63,12 +64,9 @@ export async function POST(req: Request) {
       // 404 = user does not exist = good, continue
     }
 
-    // ─── Hash password ──────────────────────────────────────────────────────
+    // ─── Hash password 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // ─── FIX: Save user WITHOUT token — token goes to tokenDb only ──────────
-    // If verificationToken is stored here AND in tokenDb, verify searches
-    // tokenDb and finds nothing when token was only saved to userDb.
     const userData: UserIdentity = {
       _id: cleanEmail,
       name: name || 'Tee User',
@@ -83,8 +81,7 @@ export async function POST(req: Request) {
     await userDb.insert(userData);
     console.log('👤 User saved to userDb:', cleanEmail);
 
-    // ─── FIX: Save token to tokenDb — this is what verify-email searches ────
-    // This was the root cause: token was in userDb, verify searched tokenDb
+    // ─── Save token to tokenDb 
     const rawToken = crypto.randomBytes(32).toString('hex');
     console.log('🔑 Token generated:', rawToken.slice(0, 16) + '...');
 
@@ -98,14 +95,11 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString(),
     };
 
-    // ─── Wrap token save in its own try/catch ────────────────────────────────
-    // If this fails, we know exactly where the problem is
     try {
       const saveResult = await tokenDb.insert(tokenDoc);
       console.log('✅ Token saved to tokenDb. ID:', saveResult.id);
     } catch (tokenErr) {
       console.error('❌ CRITICAL: Token save to tokenDb failed:', tokenErr);
-      // User saved but token failed — roll back user to keep DB clean
       try {
         const savedUser = await userDb.get(cleanEmail) as { _rev: string };
         await userDb.destroy(cleanEmail, savedUser._rev);
@@ -149,4 +143,9 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+// 2. Added GET handler to silence Next.js pre-fetch 405 logs
+export async function GET() {
+  return new Response(null, { status: 204 }); 
 }
