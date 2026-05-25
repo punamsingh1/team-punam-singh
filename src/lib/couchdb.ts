@@ -2,19 +2,19 @@ import Nano from 'nano';
 
 const env = {
   COUCHDB_URL: process.env.COUCHDB_URL,
-  USERS_DB: process.env.COUCHDB_USERS_DB,
-  SESSIONS_DB: process.env.COUCHDB_SESSIONS_DB,
+  COUCHDB_USER: process.env.COUCHDB_USER,
+  COUCHDB_PASSWORD: process.env.COUCHDB_PASSWORD,
+  COUCHDB_AUTH_DB: process.env.COUCHDB_AUTH_DB,
 };
 
 for (const [key, value] of Object.entries(env)) {
   if (!value) throw new Error(`❌ Missing env: ${key}`);
 }
 
-const couchDbUrl = env.COUCHDB_URL!;
-const usersDbName = env.USERS_DB!;
-const sessionsDbName = env.SESSIONS_DB!;
+const url = new URL(env.COUCHDB_URL!);
+url.username = env.COUCHDB_USER!;
+url.password = env.COUCHDB_PASSWORD!;
 
-export const nano = Nano(couchDbUrl);
+export const nano = Nano(url.toString());
 
-export const userDb = nano.use(usersDbName);
-export const sessionDb = nano.use(sessionsDbName);
+export const authDb = nano.db.use(env.COUCHDB_AUTH_DB!);
