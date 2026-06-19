@@ -1,0 +1,19 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "infeng.vscode-react-typescript",
+    "pmneo.tsimporter",
+    "aaron-bond.better-comments",
+    "bradlc.vscode-tailwindcss",
+    "naumovs.color-highlight",
+    "usernamehw.errorlens",
+    "wix.vscode-import-cost",
+    "eamodio.gitlens",
+    "mikestead.dotenv",
+    "orta.vscode-jest",
+    "csstools.postcss",
+    "ms-azuretools.vscode-docker"
+  ]
+}

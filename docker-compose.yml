@@ -1,0 +1,54 @@
+# docker-compose.yml
+services:
+  couchdb:
+    image: couchdb:3.4.2
+    container_name: couchdb
+    restart: unless-stopped
+    ports:
+      - "5984:5984"
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5984/_up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  couchdb-init:
+    image: curlimages/curl:latest
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    command: >
+      sh -c "
+      echo 'Waiting for CouchDB...';
+      until curl -s http://couchdb:5984/_up | grep ok; do sleep 2; done;
+
+      echo 'Creating system databases (single-node)...';
+      curl -X PUT http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb:5984/_users
+      curl -X PUT http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb:5984/_replicator
+      curl -X PUT http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb:5984/_global_changes
+
+      echo 'Creating DB...';
+      curl -X PUT http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb:5984/${COUCHDB_AUTH_DB} || true;
+
+      echo 'Creating index...';
+      curl -X POST http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb:5984/${COUCHDB_AUTH_DB}/_index
+      -H 'Content-Type: application/json'
+      -d '{\"index\":{\"fields\":[\"type\",\"createdAt\"]},\"name\":\"type-createdAt\",\"type\":\"json\"}' || true;
+
+      echo 'Done';
+      "
+
+# Container run command
+# docker compose --env-file .env.local up -d
+# docker compose up -d
+
+# Test CouchDB is running
+# curl http://127.0.0.1:5984/
+
+# Logimg to CouchDB Fauxton UI
+# http://localhost:5984/_utils
+
+

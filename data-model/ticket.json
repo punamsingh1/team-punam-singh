@@ -1,0 +1,11 @@
+{
+  
+  "type": "ticket",
+  "title": "Login issue",
+  "description": "Unable to login after password reset.",
+  "status": "open",
+  "priority": "high",
+  "createdBy": "user_001",
+  "assignedTo": "agent_001",
+  "createdAt": "2026-02-20T11:00:00Z"
+}

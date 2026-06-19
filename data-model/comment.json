@@ -1,0 +1,8 @@
+{
+  "_id": "comment_001",
+  "type": "comment",
+  "ticketId": "ticket_001",
+  "authorId": "agent_001",
+  "message": "We are investigating this issue.",
+  "createdAt": "2026-02-20T11:30:00Z"
+}
